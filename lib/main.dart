@@ -24,11 +24,15 @@ class _ListaTareasState extends State<ListaTareas> {
     // 1. Usamos setState para que la pantalla se actualice
     setState(() {
       // 2. Añadir a la lista.
-      misTareas.add(Tarea(nombre: controlador.text));
+      misTareas.add(
+        Tarea(nombre: controlador.text, fechaLimite: fechaSeleccionada),
+      );
 
       // 3. Limpiar el input.
       controlador.clear();
+      fechaSeleccionada = null;
     });
+    Navigator.of(context).pop();
     _guardarTareas();
   }
 
@@ -98,22 +102,81 @@ class _ListaTareasState extends State<ListaTareas> {
       });
     }
   }
-  
-  void _seleccionarFecha() async {
-    final DateTime? fechaCogida = await showDatePicker(
-      context: context, 
-      firstDate: DateTime.now(),
-      initialDate: DateTime.now(), 
-      lastDate: DateTime(2099, 12, 31)
+
+  void _agregarTarea() {
+    fechaSeleccionada = null;
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setStateDelDialogo) {
+            return AlertDialog(
+              title: Text('Tarea Nueva'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controlador,
+                    decoration: InputDecoration(
+                      labelText: "Nombre de la tarea",
+                    ),
+                  ),
+                  SizedBox(height: 20),
+                  InkWell(
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          fechaSeleccionada != null
+                              ? Text(
+                                  "${fechaSeleccionada!.day}/${fechaSeleccionada!.month}/${fechaSeleccionada!.year}",
+                                )
+                              : Text("dd/mm/yyyy"),
+                          Icon(Icons.calendar_today),
+                        ],
+                      ),
+                    ),
+                    onTap: () async {
+                      final DateTime? fechaCogida = await showDatePicker(
+                        context: context,
+                        firstDate: DateTime.now(),
+                        initialDate: DateTime.now(),
+                        lastDate: DateTime(2099, 12, 31),
+                      );
+
+                      if (fechaCogida != null) {
+                        setStateDelDialogo(() {
+                          fechaSeleccionada = fechaCogida;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text("Cancelar"),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    agregarTarea();
+                  },
+                  child: Text("Guardar"),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
-
-    if (fechaCogida!= null) {
-      setState(() {
-        fechaSeleccionada = fechaCogida;
-      });
-    }
   }
-
   // -------------------
 
   @override
@@ -127,21 +190,12 @@ class _ListaTareasState extends State<ListaTareas> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Lista de Tareas')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _agregarTarea,
+        child: Icon(Icons.add),
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(child: TextField(controller: controlador)),
-
-                SizedBox(width: 10),
-
-                ElevatedButton(onPressed: agregarTarea, child: Text('Guardar')),
-              ],
-            ),
-          ),
-
           // Aquí abajo pondremos la lista después. Por ahora dejémoslo vacío.
           Expanded(
             child: ReorderableListView.builder(
@@ -190,7 +244,11 @@ class _ListaTareasState extends State<ListaTareas> {
                             : Colors.black,
                       ),
                     ),
-
+                    subtitle: tareaActual.fechaLimite != null
+                        ? Text(
+                            "${tareaActual.fechaLimite!.day}/${tareaActual.fechaLimite!.month}/${tareaActual.fechaLimite!.year}",
+                          )
+                        : null,
                     // TRAILING: Es la parte derecha del ListTile
                     trailing: IconButton(
                       icon: Icon(Icons.delete, color: Colors.red),
@@ -224,18 +282,19 @@ class Tarea {
 
   Map<String, dynamic> toJson() {
     return {
-      'nombre': nombre, 
+      'nombre': nombre,
       'completada': completada,
-      'fechaLimite' : fechaLimite?.toIso8601String()
+      'fechaLimite': fechaLimite?.toIso8601String(),
     };
   }
 
   factory Tarea.fromJson(Map<String, dynamic> json) {
-    
     return Tarea(
-      nombre: json['nombre'], 
+      nombre: json['nombre'],
       completada: json['completada'],
-      fechaLimite: json['fechaLimite']!=null ? DateTime.parse(json['fechaLimite']) : null
+      fechaLimite: json['fechaLimite'] != null
+          ? DateTime.parse(json['fechaLimite'])
+          : null,
     );
   }
 }

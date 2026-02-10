@@ -19,13 +19,14 @@ class _ListaTareasState extends State<ListaTareas> {
   List<Tarea> misTareas = [];
   TextEditingController controlador = TextEditingController();
   DateTime? fechaSeleccionada;
+  int prioridadSeleccionada = 0;
 
   void agregarTarea() {
     // 1. Usamos setState para que la pantalla se actualice
     setState(() {
       // 2. Añadir a la lista.
       misTareas.add(
-        Tarea(nombre: controlador.text, fechaLimite: fechaSeleccionada),
+        Tarea(nombre: controlador.text, fechaLimite: fechaSeleccionada, prioridad: prioridadSeleccionada),
       );
 
       // 3. Limpiar el input.
@@ -49,6 +50,47 @@ class _ListaTareasState extends State<ListaTareas> {
     setState(() {
       tarea.completada = !tarea.completada;
     });
+  }
+
+  String assignarPrioridad(Tarea tarea){
+    int prioridadTarea = tarea.prioridad;
+    String prioridadString = "";
+    switch (prioridadTarea) {
+      case 0:
+        prioridadString = "Sin prioridad";
+        break;
+      case 1:
+        prioridadString = "Prioridad baja";
+        break;
+      case 2:
+        prioridadString = "Prioridad media";
+        break;
+      case 3: 
+        prioridadString = "Prioridad alta";
+        break;
+      default:
+    }
+
+    return prioridadString;
+  }
+
+  MaterialColor assignarColorPrioridad(Tarea tarea){
+    int prioridadTarea = tarea.prioridad;
+    MaterialColor colorPrioridad = Colors.lightBlue;
+    switch (prioridadTarea) {
+      case 1:
+        colorPrioridad = Colors.green;
+        break;
+      case 2:
+        colorPrioridad = Colors.orange;
+        break;
+      case 3: 
+        colorPrioridad = Colors.red;
+        break;
+      default:
+    }
+
+    return colorPrioridad;
   }
 
   void _guardarTareas() async {
@@ -105,6 +147,13 @@ class _ListaTareasState extends State<ListaTareas> {
 
   void _agregarTarea() {
     fechaSeleccionada = null;
+    prioridadSeleccionada = 0;
+    final Map<int, String> etiquetasPrioridad = {
+      0: 'Sin prioridad',
+      1: 'Prioridad baja',
+      2: 'Prioridad media',
+      3: 'Prioridad alta',
+    };
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -157,6 +206,24 @@ class _ListaTareasState extends State<ListaTareas> {
                       }
                     },
                   ),
+                  SizedBox(height: 20),
+                  DropdownButtonFormField<int>(
+                    initialValue: prioridadSeleccionada,
+                    items: [0, 1, 2, 3].map((int prioridad) {
+                      return DropdownMenuItem(
+                        value: prioridad,
+                        child: Text(etiquetasPrioridad[prioridad]!)
+                        );
+                    }).toList(),
+                    onChanged: (value)  {
+                      if(value != null){
+                        setStateDelDialogo(() {
+                          prioridadSeleccionada = value;
+                        });
+                      }
+                    },
+                  )
+
                 ],
               ),
               actions: [
@@ -177,6 +244,7 @@ class _ListaTareasState extends State<ListaTareas> {
       },
     );
   }
+  
   // -------------------
 
   @override
@@ -244,11 +312,15 @@ class _ListaTareasState extends State<ListaTareas> {
                             : Colors.black,
                       ),
                     ),
-                    subtitle: tareaActual.fechaLimite != null
-                        ? Text(
-                            "${tareaActual.fechaLimite!.day}/${tareaActual.fechaLimite!.month}/${tareaActual.fechaLimite!.year}",
-                          )
-                        : null,
+
+                    subtitle: Row(
+                      children: [
+                        tareaActual.fechaLimite != null ? Text("${tareaActual.fechaLimite!.day}/${tareaActual.fechaLimite!.month}/${tareaActual.fechaLimite!.year} - ",) : Text(""),
+                        Text(assignarPrioridad(tareaActual), style: TextStyle(
+                          color: assignarColorPrioridad(tareaActual)
+                        ),)
+                      ],
+                    ),
                     // TRAILING: Es la parte derecha del ListTile
                     trailing: IconButton(
                       icon: Icon(Icons.delete, color: Colors.red),
@@ -277,14 +349,16 @@ class Tarea {
   String nombre;
   bool completada;
   DateTime? fechaLimite;
+  int prioridad;
 
-  Tarea({required this.nombre, this.completada = false, this.fechaLimite});
+  Tarea({required this.nombre, this.completada = false, this.fechaLimite, this.prioridad = 0});
 
   Map<String, dynamic> toJson() {
     return {
       'nombre': nombre,
       'completada': completada,
       'fechaLimite': fechaLimite?.toIso8601String(),
+      'prioridad': prioridad,
     };
   }
 
@@ -295,6 +369,7 @@ class Tarea {
       fechaLimite: json['fechaLimite'] != null
           ? DateTime.parse(json['fechaLimite'])
           : null,
+      prioridad: json['prioridad'],
     );
   }
 }

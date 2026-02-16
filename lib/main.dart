@@ -38,18 +38,24 @@ class _ListaTareasState extends State<ListaTareas> {
     _guardarTareas();
   }
 
+  void actualizarTarea(int index){
+    setState(() {
+      misTareas[index].nombre = controlador.text;
+      misTareas[index].fechaLimite = fechaSeleccionada;
+      misTareas[index].prioridad = prioridadSeleccionada;
+
+      controlador.clear();
+      fechaSeleccionada = null;
+    });
+    Navigator.of(context).pop();
+  }
+
   void eliminarTarea(int index) {
     // 1. Necesitamos setState para avisar a la pantalla.
     setState(() {
       // 2. Borra el elemento usando 'index'.
       misTareas.removeAt(index);
       Navigator.of(context).pop();
-    });
-  }
-
-  void completarTarea(Tarea tarea) {
-    setState(() {
-      tarea.completada = !tarea.completada;
     });
   }
 
@@ -146,7 +152,7 @@ class _ListaTareasState extends State<ListaTareas> {
     }
   }
 
-  void _agregarTarea() {
+  void _mostrarFormTarea({int? posTarea}) {
     fechaSeleccionada = null;
     prioridadSeleccionada = 0;
     final Map<int, String> etiquetasPrioridad = {
@@ -155,6 +161,12 @@ class _ListaTareasState extends State<ListaTareas> {
       2: 'Prioridad media',
       3: 'Prioridad alta',
     };
+    if (posTarea != null) {
+      Tarea tarea = misTareas[posTarea];
+      controlador.text = tarea.nombre;
+      fechaSeleccionada = tarea.fechaLimite;
+      prioridadSeleccionada = tarea.prioridad;
+    }
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -234,7 +246,13 @@ class _ListaTareasState extends State<ListaTareas> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    agregarTarea();
+                    if (posTarea != null) {
+                      actualizarTarea(posTarea);
+                    }
+                    else {
+                      agregarTarea();
+
+                    }
                   },
                   child: Text("Guardar"),
                 ),
@@ -260,7 +278,7 @@ class _ListaTareasState extends State<ListaTareas> {
     return Scaffold(
       appBar: AppBar(title: Text('Lista de Tareas')),
       floatingActionButton: FloatingActionButton(
-        onPressed: _agregarTarea,
+        onPressed: _mostrarFormTarea,
         child: Icon(Icons.add),
       ),
       body: Column(
@@ -294,29 +312,38 @@ class _ListaTareasState extends State<ListaTareas> {
                   key: ValueKey(misTareas[index]),
                   margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
                   child: ListTile(
-                    leading: Icon(
-                      tareaActual.completada
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank,
-                      color: Colors.deepPurple[400],
+                    leading: ActionChip(
+                      label: Text(tareaActual.getStringEstado()),
+                      backgroundColor: tareaActual.getColorEstado(),
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          tareaActual.avanzarEstado();
+                        });
+                        _guardarTareas();
+                      },
+                      avatar: CircleAvatar(
+                        backgroundColor: Colors.white24,
+                        child: Icon(
+                          Icons.circle,
+                          size: 10, 
+                          color: Colors.white
+                        ),
+                      ),
                     ),
 
                     // Aquí mostramos el texto que recuperaste arriba
                     title: Text(
                       tareaActual.nombre,
-                      style: TextStyle(
-                        decoration: tareaActual.completada
-                            ? TextDecoration.lineThrough
-                            : null,
-                        color: tareaActual.completada
-                            ? Colors.grey
-                            : Colors.black,
-                      ),
                     ),
 
-                    subtitle: Row(
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        tareaActual.fechaLimite != null ? Text("${tareaActual.fechaLimite!.day}/${tareaActual.fechaLimite!.month}/${tareaActual.fechaLimite!.year} - ",) : Text(""),
+                        tareaActual.fechaLimite != null ? Text("${tareaActual.fechaLimite!.day}/${tareaActual.fechaLimite!.month}/${tareaActual.fechaLimite!.year}",) : Text(""),
                         Text(assignarPrioridad(tareaActual), style: TextStyle(
                           color: assignarColorPrioridad(tareaActual)
                         ),)
@@ -332,7 +359,7 @@ class _ListaTareasState extends State<ListaTareas> {
                     ),
 
                     onTap: () {
-                      completarTarea(tareaActual);
+                      _mostrarFormTarea(posTarea: index);
                       _guardarTareas();
                     },
                   ),

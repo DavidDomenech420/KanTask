@@ -254,7 +254,7 @@ class _ListaTareasState extends State<ListaTareas> {
 
                     }
                   },
-                  child: Text("Guardar"),
+                  child: posTarea != null ? Text("Actualizar") : Text("Guardar"),
                 ),
               ],
             );

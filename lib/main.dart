@@ -264,51 +264,41 @@ class _ListaTareasState extends State<ListaTareas> {
     );
   }
   
-  // -------------------
-
-  @override
-  void initState() {
-    super.initState(); // Siempre hay que llamar al "super" primero
-
-    _leerTareas();
+  List<Tarea> _filtrarTareas(EstadoTarea estadoBuscado) {
+    return misTareas.where((tarea) => tarea.estado == estadoBuscado).toList();
   }
+  
+  Widget _construirColumna(String titulo, EstadoTarea estadoDeLaColumna) {
+    List<Tarea> tareasFiltradas = _filtrarTareas(estadoDeLaColumna);
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Lista de Tareas')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _mostrarFormTarea,
-        child: Icon(Icons.add),
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.85, 
+      margin: EdgeInsets.symmetric(horizontal: 10, vertical: 20),
+      decoration: BoxDecoration(
+        color: Colors.grey[200], // Un fondo gris clarito tipo Trello
+        borderRadius: BorderRadius.circular(10),
       ),
-      body: Column(
+      child: Column(
         children: [
-          // Aquí abajo pondremos la lista después. Por ahora dejémoslo vacío.
+          Padding(
+            padding: EdgeInsets.all(15),
+            child: Text(
+              titulo, 
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
+            ),
+          ),
+          
+          // 3. LA LISTA DE TAREAS
           Expanded(
-            child: ReorderableListView.builder(
-              itemCount: misTareas.length,
-
-              onReorder: (int oldIndex, int newIndex) {
-                setState(() {
-                  // Ajuste necesario porque al quitar un elemento, la lista se acorta
-                  if (oldIndex < newIndex) {
-                    newIndex -= 1;
-                  }
-
-                  final Tarea item = misTareas.removeAt(oldIndex);
-
-                  misTareas.insert(newIndex, item);
-                });
-                _guardarTareas();
-              },
-
-              // Este constructor se ejecuta una vez por cada tarea.
-              // 'index' es la posición (0, 1, 2, 3...)
+            child: ListView.builder(
+              itemCount: tareasFiltradas.length,
               itemBuilder: (context, index) {
-                final tareaActual = misTareas[index];
-
-                // Aquí devolvemos el diseño de la fila.
-                return Card(
+                Tarea tareaActual = tareasFiltradas[index];
+                
+                // TU MISIÓN AQUÍ: 
+                // Pega aquí el widget ListTile (o Card) que ya tenías hecho antes.
+                // Ojo: asegúrate de que use 'tareaActual' para mostrar los datos.
+                return  Card(
                   key: ValueKey(misTareas[index]),
                   margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
                   child: ListTile(
@@ -366,7 +356,37 @@ class _ListaTareasState extends State<ListaTareas> {
                 );
               },
             ),
-          ),
+          )
+        ],
+      ),
+    );
+  }
+  // -------------------
+
+  @override
+  void initState() {
+    super.initState(); // Siempre hay que llamar al "super" primero
+
+    _leerTareas();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Lista de Tareas')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _mostrarFormTarea,
+        child: Icon(Icons.add),
+      ),
+      body: ListView(
+        scrollDirection: Axis.horizontal, 
+        
+        children: [
+          // TU MISIÓN: Llama a la función _construirColumna 4 veces
+          _construirColumna("Backlog", EstadoTarea.backlog),
+          _construirColumna("En Progreso", EstadoTarea.enProgreso),
+          _construirColumna("Completado", EstadoTarea.completado),
+          _construirColumna("Bloqueado", EstadoTarea.bloqueado),
         ],
       ),
     );

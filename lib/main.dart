@@ -1,4 +1,5 @@
-import 'dart:math';
+import 'dart:async';
+
 import 'data/tarea.dart';
 
 import 'package:flutter/material.dart';
@@ -21,6 +22,8 @@ class _ListaTareasState extends State<ListaTareas> {
   TextEditingController controlador = TextEditingController();
   DateTime? fechaSeleccionada;
   int prioridadSeleccionada = 0;
+  final ScrollController _scrollController = ScrollController();
+  Timer? _scrollTimer;
 
   void agregarTarea() {
     // 1. Usamos setState para que la pantalla se actualice
@@ -100,6 +103,25 @@ class _ListaTareasState extends State<ListaTareas> {
     return colorPrioridad;
   }
 
+  Color assignarColorEstado(EstadoTarea estado){
+    Color colorEstado;
+    switch (estado) {
+      case EstadoTarea.backlog:
+        colorEstado = Colors.blue[200]!;
+        break;
+      case EstadoTarea.enProgreso:
+        colorEstado = Colors.orange[200]!;
+        break;
+      case EstadoTarea.completado: 
+        colorEstado = Colors.green[200]!;
+        break;
+      case EstadoTarea.bloqueado:
+        colorEstado =  Colors.red[200]!;
+    }
+
+    return colorEstado;
+  }
+
   void _guardarTareas() async {
     SharedPreferences preferencias = await SharedPreferences.getInstance();
 
@@ -143,7 +165,7 @@ class _ListaTareasState extends State<ListaTareas> {
     // 1. Intentamos leer el texto guardado.
     final String? tareasJson = preferencias.getString('mis_tareas_v1');
 
-    // 2. Si hay datos (no es null), los cargamos.
+    // 2. Si hay datos, los cargamos.
     if (tareasJson != null) {
       setState(() {
         List<dynamic> mapaTareas = jsonDecode(tareasJson);
@@ -271,101 +293,163 @@ class _ListaTareasState extends State<ListaTareas> {
   Widget _construirColumna(String titulo, EstadoTarea estadoDeLaColumna) {
     List<Tarea> tareasFiltradas = _filtrarTareas(estadoDeLaColumna);
 
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.85, 
-      margin: EdgeInsets.symmetric(horizontal: 10, vertical: 20),
-      decoration: BoxDecoration(
-        color: Colors.grey[200], // Un fondo gris clarito tipo Trello
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(15),
-            child: Text(
-              titulo, 
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
-            ),
+    return DragTarget(
+
+      onAcceptWithDetails: (DragTargetDetails<Tarea> detalles){
+        Tarea tareaArrastrada = detalles.data;
+        setState(() {
+          tareaArrastrada.estado = estadoDeLaColumna;
+        });
+        _guardarTareas();
+      },
+
+      builder: (context, candidateData, rejectedData) {
+        return Container(
+          width: MediaQuery.of(context).size.width * 0.85, 
+          margin: EdgeInsets.symmetric(horizontal: 10, vertical: 20),
+          decoration: BoxDecoration(
+            color: assignarColorEstado(estadoDeLaColumna),
+            borderRadius: BorderRadius.circular(10),
           ),
-          
-          // 3. LA LISTA DE TAREAS
-          Expanded(
-            child: ListView.builder(
-              itemCount: tareasFiltradas.length,
-              itemBuilder: (context, index) {
-                Tarea tareaActual = tareasFiltradas[index];
-                
-                // TU MISIÓN AQUÍ: 
-                // Pega aquí el widget ListTile (o Card) que ya tenías hecho antes.
-                // Ojo: asegúrate de que use 'tareaActual' para mostrar los datos.
-                return  Card(
-                  key: ValueKey(misTareas[index]),
-                  margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-                  child: ListTile(
-                    leading: ActionChip(
-                      label: Text(tareaActual.getStringEstado()),
-                      backgroundColor: tareaActual.getColorEstado(),
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          tareaActual.avanzarEstado();
-                        });
-                        _guardarTareas();
-                      },
-                      avatar: CircleAvatar(
-                        backgroundColor: Colors.white24,
-                        child: Icon(
-                          Icons.circle,
-                          size: 10, 
-                          color: Colors.white
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(15),
+                child: Text(
+                  titulo, 
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
+                ),
+              ),
+              
+              // 3. LA LISTA DE TAREAS
+              Expanded(
+                child: ListView.builder(
+                  itemCount: tareasFiltradas.length,
+                  itemBuilder: (context, index) {
+                    Tarea tareaActual = tareasFiltradas[index];
+                    return Draggable(
+                      data: tareaActual,
+                      feedback: Material(
+                        elevation: 6,
+                        color: Colors.transparent,
+                        child: SizedBox(
+                          width: MediaQuery.of(context).size.width * 0.8, // Ancho parecido a la columna
+                          child: _contruirTarea(tareaActual, index),
                         ),
                       ),
-                    ),
-
-                    // Aquí mostramos el texto que recuperaste arriba
-                    title: Text(
-                      tareaActual.nombre,
-                    ),
-
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        tareaActual.fechaLimite != null ? Text("${tareaActual.fechaLimite!.day}/${tareaActual.fechaLimite!.month}/${tareaActual.fechaLimite!.year}",) : Text(""),
-                        Text(assignarPrioridad(tareaActual), style: TextStyle(
-                          color: assignarColorPrioridad(tareaActual)
-                        ),)
-                      ],
-                    ),
-                    // TRAILING: Es la parte derecha del ListTile
-                    trailing: IconButton(
-                      icon: Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-                        _preguntarBorrado(index);
-                        _guardarTareas();
+                      onDragUpdate: (DragUpdateDetails detalles) {
+                        _comprobarBordes(detalles.globalPosition);
                       },
-                    ),
+                      onDragEnd: (DraggableDetails detalles) {
+                        _detenerAutoScroll();
+                      },
+                      onDraggableCanceled: (Velocity velocidad, Offset offset) {
+                        _detenerAutoScroll();
+                      },
 
-                    onTap: () {
-                      _mostrarFormTarea(posTarea: index);
-                      _guardarTareas();
-                    },
-                  ),
-                );
-              },
-            ),
-          )
-        ],
+                      childWhenDragging: Opacity(
+                        opacity: 0.3,
+                        child: _contruirTarea(tareaActual, index),
+                      ),
+                      child: _contruirTarea(tareaActual, index), 
+                    );
+                    
+                  },
+                ),
+              )
+            ],
+          ),
+        );
+      }
+    );
+    
+  }
+  
+  Widget _contruirTarea(Tarea tarea, int index){
+    return  Card(
+      key: ValueKey(misTareas[index]),
+      margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+      child: ListTile(
+
+        // Aquí mostramos el texto que recuperaste arriba
+        title: Text(
+          tarea.nombre,
+        ),
+
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            tarea.fechaLimite != null ? Text("${tarea.fechaLimite!.day}/${tarea.fechaLimite!.month}/${tarea.fechaLimite!.year}",) : Text(""),
+            Text(assignarPrioridad(tarea), style: TextStyle(
+              color: assignarColorPrioridad(tarea)
+            ),)
+          ],
+        ),
+        // TRAILING: Es la parte derecha del ListTile
+        trailing: IconButton(
+          icon: Icon(Icons.delete, color: Colors.red),
+          onPressed: () {
+            _preguntarBorrado(index);
+            _guardarTareas();
+          },
+        ),
+
+        onTap: () {
+          _mostrarFormTarea(posTarea: index);
+          _guardarTareas();
+        },
       ),
     );
+  }
+  
+  
+  // 1. Inicia el bucle de movimiento
+  void _iniciarAutoScroll(int direccion) {
+    // Si ya se está moviendo, no hacemos nada
+    if (_scrollTimer != null && _scrollTimer!.isActive) return; 
+
+    // Cada 50 milisegundos, movemos la pantalla un poquito
+    _scrollTimer = Timer.periodic(Duration(milliseconds: 50), (timer) {
+      // Calculamos la nueva posición (15 píxeles por cada "tic" del reloj)
+      double nuevaPosicion = _scrollController.offset + (15.0 * direccion);
+
+      // Evitamos que intente hacer scroll más allá de los límites
+      if (nuevaPosicion < 0) nuevaPosicion = 0;
+      if (nuevaPosicion > _scrollController.position.maxScrollExtent) {
+        nuevaPosicion = _scrollController.position.maxScrollExtent;
+      }
+
+      // Le decimos al controlador que salte a la nueva posición
+      _scrollController.jumpTo(nuevaPosicion);
+    });
+  }
+
+  // 2. Apaga el motor
+  void _detenerAutoScroll() {
+    _scrollTimer?.cancel();
+  }
+
+  // 3. El Radar: Comprueba dónde está tu dedo
+  void _comprobarBordes(Offset posicionDelDedo) {
+    final anchoPantalla = MediaQuery.of(context).size.width;
+    final zonaSensible = 70.0; // Píxeles de margen en los bordes
+
+    if (posicionDelDedo.dx > anchoPantalla - zonaSensible) {
+      // Dedo en el borde DERECHO -> Movemos hacia adelante (+1)
+      _iniciarAutoScroll(1);
+    } else if (posicionDelDedo.dx < zonaSensible) {
+      // Dedo en el borde IZQUIERDO -> Movemos hacia atrás (-1)
+      _iniciarAutoScroll(-1);
+    } else {
+      // Dedo en el centro de la pantalla -> Paramos
+      _detenerAutoScroll();
+    }
   }
   // -------------------
 
   @override
   void initState() {
-    super.initState(); // Siempre hay que llamar al "super" primero
+    super.initState(); // Llamamos al "super"
 
     _leerTareas();
   }
@@ -373,16 +457,25 @@ class _ListaTareasState extends State<ListaTareas> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Lista de Tareas')),
+      appBar: AppBar(
+        title: Text('Lista de Tareas'),
+        titleTextStyle: TextStyle(
+          fontSize: 27,
+          fontWeight: FontWeight.bold
+        ),
+        backgroundColor: Colors.purple[800],
+        ),
       floatingActionButton: FloatingActionButton(
         onPressed: _mostrarFormTarea,
         child: Icon(Icons.add),
       ),
+      backgroundColor: Colors.grey[850],
       body: ListView(
         scrollDirection: Axis.horizontal, 
+        controller: _scrollController,
         
         children: [
-          // TU MISIÓN: Llama a la función _construirColumna 4 veces
+          // Construimos las 4 diferentes columnas segun el estado
           _construirColumna("Backlog", EstadoTarea.backlog),
           _construirColumna("En Progreso", EstadoTarea.enProgreso),
           _construirColumna("Completado", EstadoTarea.completado),

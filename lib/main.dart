@@ -26,14 +26,14 @@ class _ListaTareasState extends State<ListaTareas> {
   Timer? _scrollTimer;
 
   void agregarTarea() {
-    // 1. Usamos setState para que la pantalla se actualice
+    // Usamos setState para que la pantalla se actualice
     setState(() {
-      // 2. Añadir a la lista.
+      // Añadir a la lista.
       misTareas.add(
         Tarea(nombre: controlador.text, fechaLimite: fechaSeleccionada, prioridad: prioridadSeleccionada),
       );
 
-      // 3. Limpiar el input.
+      // Limpiar el input.
       controlador.clear();
       fechaSeleccionada = null;
     });
@@ -54,9 +54,8 @@ class _ListaTareasState extends State<ListaTareas> {
   }
 
   void eliminarTarea(int index) {
-    // 1. Necesitamos setState para avisar a la pantalla.
     setState(() {
-      // 2. Borra el elemento usando 'index'.
+      // Borra el elemento usando 'index'.
       misTareas.removeAt(index);
       Navigator.of(context).pop();
     });
@@ -162,10 +161,10 @@ class _ListaTareasState extends State<ListaTareas> {
   void _leerTareas() async {
     final preferencias = await SharedPreferences.getInstance();
 
-    // 1. Intentamos leer el texto guardado.
+    // Intentamos leer el texto guardado.
     final String? tareasJson = preferencias.getString('mis_tareas_v1');
 
-    // 2. Si hay datos, los cargamos.
+    // Si hay datos, los cargamos.
     if (tareasJson != null) {
       setState(() {
         List<dynamic> mapaTareas = jsonDecode(tareasJson);
@@ -321,39 +320,51 @@ class _ListaTareasState extends State<ListaTareas> {
                 ),
               ),
               
-              // 3. LA LISTA DE TAREAS
+              // LISTA DE TAREAS
               Expanded(
                 child: ListView.builder(
                   itemCount: tareasFiltradas.length,
                   itemBuilder: (context, index) {
                     Tarea tareaActual = tareasFiltradas[index];
-                    return Draggable(
-                      data: tareaActual,
-                      feedback: Material(
-                        elevation: 6,
-                        color: Colors.transparent,
-                        child: SizedBox(
-                          width: MediaQuery.of(context).size.width * 0.8, // Ancho parecido a la columna
-                          child: _contruirTarea(tareaActual, index),
-                        ),
-                      ),
-                      onDragUpdate: (DragUpdateDetails detalles) {
-                        _comprobarBordes(detalles.globalPosition);
-                      },
-                      onDragEnd: (DraggableDetails detalles) {
-                        _detenerAutoScroll();
-                      },
-                      onDraggableCanceled: (Velocity velocidad, Offset offset) {
-                        _detenerAutoScroll();
+                    return DragTarget<Tarea>(
+                      onAcceptWithDetails: (detalles) {
+                        Tarea arrastrada = detalles.data;
+                        
+                        // Solo reordenamos si no estamos soltando la tarea sobre sí misma
+                        if (arrastrada != tareaActual) {
+                          _reordenarTarea(arrastrada, tareaActual);
+                        }
                       },
 
-                      childWhenDragging: Opacity(
-                        opacity: 0.3,
-                        child: _contruirTarea(tareaActual, index),
-                      ),
-                      child: _contruirTarea(tareaActual, index), 
+                      builder: (context, candidateData, rejectedData) {
+                        return Draggable(
+                          data: tareaActual,
+                          feedback: Material(
+                            elevation: 6,
+                            color: Colors.transparent,
+                            child: SizedBox(
+                              width: MediaQuery.of(context).size.width * 0.8, // Ancho columna (No completa para que se vea la siguiente)
+                              child: _construirTarea(tareaActual, index),
+                            ),
+                          ),
+                          onDragUpdate: (DragUpdateDetails detalles) {
+                            _comprobarBordes(detalles.globalPosition);
+                          },
+                          onDragEnd: (DraggableDetails detalles) {
+                            _detenerAutoScroll();
+                          },
+                          onDraggableCanceled: (Velocity velocidad, Offset offset) {
+                            _detenerAutoScroll();
+                          },
+
+                          childWhenDragging: Opacity(
+                            opacity: 0.3,
+                            child: _construirTarea(tareaActual, index),
+                          ),
+                          child: _construirTarea(tareaActual, index), 
+                        );
+                      }
                     );
-                    
                   },
                 ),
               )
@@ -365,13 +376,12 @@ class _ListaTareasState extends State<ListaTareas> {
     
   }
   
-  Widget _contruirTarea(Tarea tarea, int index){
+  Widget _construirTarea(Tarea tarea, int index){
     return  Card(
       key: ValueKey(misTareas[index]),
       margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
       child: ListTile(
 
-        // Aquí mostramos el texto que recuperaste arriba
         title: Text(
           tarea.nombre,
         ),
@@ -385,7 +395,6 @@ class _ListaTareasState extends State<ListaTareas> {
             ),)
           ],
         ),
-        // TRAILING: Es la parte derecha del ListTile
         trailing: IconButton(
           icon: Icon(Icons.delete, color: Colors.red),
           onPressed: () {
@@ -403,17 +412,16 @@ class _ListaTareasState extends State<ListaTareas> {
   }
   
   
-  // 1. Inicia el bucle de movimiento
   void _iniciarAutoScroll(int direccion) {
     // Si ya se está moviendo, no hacemos nada
     if (_scrollTimer != null && _scrollTimer!.isActive) return; 
 
-    // Cada 50 milisegundos, movemos la pantalla un poquito
+    // Cada 50 milisegundos, movemos la pantalla un poco
     _scrollTimer = Timer.periodic(Duration(milliseconds: 50), (timer) {
       // Calculamos la nueva posición (15 píxeles por cada "tic" del reloj)
       double nuevaPosicion = _scrollController.offset + (15.0 * direccion);
 
-      // Evitamos que intente hacer scroll más allá de los límites
+      // Evitamos superar los limites
       if (nuevaPosicion < 0) nuevaPosicion = 0;
       if (nuevaPosicion > _scrollController.position.maxScrollExtent) {
         nuevaPosicion = _scrollController.position.maxScrollExtent;
@@ -424,26 +432,37 @@ class _ListaTareasState extends State<ListaTareas> {
     });
   }
 
-  // 2. Apaga el motor
   void _detenerAutoScroll() {
     _scrollTimer?.cancel();
   }
 
-  // 3. El Radar: Comprueba dónde está tu dedo
+  // Comprobamos donde esta el dedo
   void _comprobarBordes(Offset posicionDelDedo) {
     final anchoPantalla = MediaQuery.of(context).size.width;
     final zonaSensible = 70.0; // Píxeles de margen en los bordes
 
     if (posicionDelDedo.dx > anchoPantalla - zonaSensible) {
-      // Dedo en el borde DERECHO -> Movemos hacia adelante (+1)
+      // Dedo en el borde derecho -> Movemos hacia adelante
       _iniciarAutoScroll(1);
     } else if (posicionDelDedo.dx < zonaSensible) {
-      // Dedo en el borde IZQUIERDO -> Movemos hacia atrás (-1)
+      // Dedo en el borde izquierdo -> Movemos hacia atrás
       _iniciarAutoScroll(-1);
     } else {
-      // Dedo en el centro de la pantalla -> Paramos
       _detenerAutoScroll();
     }
+  }
+  
+  void _reordenarTarea(Tarea tareaArrastrada, Tarea tareaObjetivo) {
+    setState(() {
+      // Cambiamos el estado de la tarea arrastrada por si viene de otra columna distinta
+      tareaArrastrada.estado = tareaObjetivo.estado;
+
+      misTareas.remove(tareaArrastrada);      
+      int indiceTareaObj = misTareas.indexOf(tareaObjetivo);
+      misTareas.insert(indiceTareaObj, tareaArrastrada);
+    });
+    
+    _guardarTareas();
   }
   // -------------------
 

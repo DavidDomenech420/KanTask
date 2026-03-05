@@ -25,12 +25,12 @@ class _ListaTareasState extends State<ListaTareas> {
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollTimer;
 
-  void agregarTarea() {
+  void agregarTarea(EstadoTarea estadoTarea) {
     // Usamos setState para que la pantalla se actualice
     setState(() {
       // Añadir a la lista.
       misTareas.add(
-        Tarea(nombre: controlador.text, fechaLimite: fechaSeleccionada, prioridad: prioridadSeleccionada),
+        Tarea(nombre: controlador.text, fechaLimite: fechaSeleccionada, prioridad: prioridadSeleccionada, estado: estadoTarea),
       );
 
       // Limpiar el input.
@@ -173,7 +173,7 @@ class _ListaTareasState extends State<ListaTareas> {
     }
   }
 
-  void _mostrarFormTarea({int? posTarea}) {
+  void _mostrarFormTarea(EstadoTarea estadoDeLaColumna, {int? posTarea}) {
     fechaSeleccionada = null;
     prioridadSeleccionada = 0;
     final Map<int, String> etiquetasPrioridad = {
@@ -182,6 +182,7 @@ class _ListaTareasState extends State<ListaTareas> {
       2: 'Prioridad media',
       3: 'Prioridad alta',
     };
+    controlador.text = "";
     if (posTarea != null) {
       Tarea tarea = misTareas[posTarea];
       controlador.text = tarea.nombre;
@@ -271,7 +272,7 @@ class _ListaTareasState extends State<ListaTareas> {
                       actualizarTarea(posTarea);
                     }
                     else {
-                      agregarTarea();
+                      agregarTarea(estadoDeLaColumna);
 
                     }
                   },
@@ -367,7 +368,26 @@ class _ListaTareasState extends State<ListaTareas> {
                     );
                   },
                 ),
-              )
+              ),
+              Padding(
+                padding: EdgeInsets.only(left: 15.0, right: 15.0, bottom: 15.0),
+                child: TextButton.icon(
+                  onPressed: () {
+                    // TU MISIÓN: Llama a tu función para abrir el formulario
+                    _mostrarFormTarea(estadoDeLaColumna); 
+                  },
+                  icon: Icon(Icons.add, color: Colors.black, size: 25,),
+                  label: Text("Añadir tarea", style: TextStyle(color: Colors.black, fontSize: 18)),
+                  
+                  style: TextButton.styleFrom(
+                    // Esto hace que el botón ocupe todo el ancho de la columna
+                    minimumSize: Size(double.infinity, 50), 
+                    alignment: Alignment.centerLeft, // Alineamos el texto a la izquierda
+                    padding: EdgeInsets.symmetric(horizontal: 15),
+                    backgroundColor: const Color.fromARGB(106, 14, 14, 14)
+                  ),
+                ),
+              ),              
             ],
           ),
         );
@@ -398,13 +418,13 @@ class _ListaTareasState extends State<ListaTareas> {
         trailing: IconButton(
           icon: Icon(Icons.delete, color: Colors.red),
           onPressed: () {
-            _preguntarBorrado(index);
+            _preguntarBorrado(misTareas.indexOf(tarea));
             _guardarTareas();
           },
         ),
 
         onTap: () {
-          _mostrarFormTarea(posTarea: index);
+          _mostrarFormTarea(posTarea: misTareas.indexOf(tarea), tarea.estado);
           _guardarTareas();
         },
       ),
@@ -484,10 +504,6 @@ class _ListaTareasState extends State<ListaTareas> {
         ),
         backgroundColor: Colors.purple[800],
         ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _mostrarFormTarea,
-        child: Icon(Icons.add),
-      ),
       backgroundColor: Colors.grey[850],
       body: ListView(
         scrollDirection: Axis.horizontal, 

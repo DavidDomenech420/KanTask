@@ -5,8 +5,20 @@ import 'data/tarea.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
+
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!, 
+  );
+
+
   runApp(MaterialApp(home: ListaTareas()));
 }
 
@@ -19,11 +31,24 @@ class _ListaTareasState extends State<ListaTareas> {
   // --- ZONA LÓGICA ---
 
   List<Tarea> misTareas = [];
+  List<Map<String, dynamic>> misTableros = [];
+  Map<String, dynamic>? tableroActual;
+
   TextEditingController controlador = TextEditingController();
   DateTime? fechaSeleccionada;
   int prioridadSeleccionada = 0;
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollTimer;
+
+  void _cargarTableros() async{
+    var tableros = await Supabase.instance.client.from('board').select();
+    setState(() {
+      if (tableros.isNotEmpty) {
+        misTableros = tableros;
+        tableroActual = misTableros.first;
+      }
+    });
+  }
 
   void agregarTarea(EstadoTarea estadoTarea) {
     // Usamos setState para que la pantalla se actualice
@@ -489,8 +514,9 @@ class _ListaTareasState extends State<ListaTareas> {
   @override
   void initState() {
     super.initState(); // Llamamos al "super"
-
+    _cargarTableros();
     _leerTareas();
+
   }
 
   @override
@@ -505,6 +531,28 @@ class _ListaTareasState extends State<ListaTareas> {
         backgroundColor: Colors.purple[800],
         ),
       backgroundColor: Colors.grey[850],
+      drawer: Drawer(
+        child: ListView.builder(
+          itemCount: misTableros.length,
+          itemBuilder: (context, index) {
+            // Obtenemos el tablero actual del bucle
+            var tablero = misTableros[index]; 
+            
+            return ListTile(
+              leading: Icon(Icons.dashboard),
+              // TU MISIÓN: Muestra el nombre del tablero usando tablero['name']
+              title: Text(tablero["name"]), 
+              
+              onTap: () {
+                setState(() {
+                  tableroActual = tablero;
+                  Navigator.pop(context);
+                });
+              },
+            );
+          },
+        ),
+      ),
       body: ListView(
         scrollDirection: Axis.horizontal, 
         controller: _scrollController,

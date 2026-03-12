@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 class Tarea {
+  int? id;
   String nombre;
+  String descripcion;
   EstadoTarea estado;
   DateTime? fechaLimite;
   int prioridad;
+  int boardId;
 
-  Tarea({required this.nombre, this.estado = EstadoTarea.backlog, this.fechaLimite, this.prioridad = 0});
+  Tarea({this.id, required this.nombre, this.descripcion = "", this.estado = EstadoTarea.backlog, this.fechaLimite, this.prioridad = 0, required this.boardId});
 
   Map<String, dynamic> toJson() {
     return {
@@ -19,12 +22,15 @@ class Tarea {
 
   factory Tarea.fromJson(Map<String, dynamic> json) {
     return Tarea(
-      nombre: json['nombre'],
-      estado: EstadoTarea.values.byName(json['estado'] ?? 'backlog'),
-      fechaLimite: json['fechaLimite'] != null
-          ? DateTime.parse(json['fechaLimite'])
+      id: json['id'],
+      nombre: json['title'] ?? 'Sin título',
+      descripcion: json['description'] ?? '',
+      estado: EstadoTarea.values.byName(json['status'] ?? 'backlog'),
+      fechaLimite: json['due_date'] != null
+          ? DateTime.parse(json['due_date'])
           : null,
-      prioridad: json['prioridad'],
+      prioridad: json['priority'] ?? 0,
+      boardId: json['board_id'] ?? 0,
     );
   }
 

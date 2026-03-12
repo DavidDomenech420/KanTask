@@ -30,7 +30,7 @@ class ListaTareas extends StatefulWidget {
 class _ListaTareasState extends State<ListaTareas> {
   // --- ZONA LÓGICA ---
 
-  List<Tarea> misTareas = [];
+  List<Tarea> tareasTablero = [];
   List<Map<String, dynamic>> misTableros = [];
   Map<String, dynamic>? tableroActual;
 
@@ -46,31 +46,41 @@ class _ListaTareasState extends State<ListaTareas> {
       if (tableros.isNotEmpty) {
         misTableros = tableros;
         tableroActual = misTableros.first;
+        _cargarTareas();
       }
     });
   }
 
-  void agregarTarea(EstadoTarea estadoTarea) {
-    // Usamos setState para que la pantalla se actualice
-    setState(() {
-      // Añadir a la lista.
-      misTareas.add(
-        Tarea(nombre: controlador.text, fechaLimite: fechaSeleccionada, prioridad: prioridadSeleccionada, estado: estadoTarea),
-      );
+  void _cargarTareas() async {
+    if (tableroActual != null) {
+      final List<dynamic> tareas = await Supabase.instance.client.from('task').select().eq('board_id', tableroActual!['id']);
+      List<Tarea> tareasTipadas = tareas.map((diccionario) {
+        return Tarea.fromJson(diccionario);
+      }).toList();
+      setState(() {
+        tareasTablero = tareasTipadas;
+      });
+    }
+  }
 
-      // Limpiar el input.
-      controlador.clear();
-      fechaSeleccionada = null;
-    });
-    Navigator.of(context).pop();
-    _guardarTareas();
+  void _crearTarea(EstadoTarea estadoTarea) async {
+    Map<String, dynamic> nuevaTarea = {
+      'title': controlador.text,
+      'due_date': fechaSeleccionada?.toIso8601String(),
+      'priority': prioridadSeleccionada,
+      'status': estadoTarea.name, 
+      'board_id': tableroActual!['id'],
+    };
+
+    await Supabase.instance.client.from('task').insert(nuevaTarea);
+    _cargarTareas();
   }
 
   void actualizarTarea(int index){
     setState(() {
-      misTareas[index].nombre = controlador.text;
-      misTareas[index].fechaLimite = fechaSeleccionada;
-      misTareas[index].prioridad = prioridadSeleccionada;
+      tareasTablero[index].nombre = controlador.text;
+      tareasTablero[index].fechaLimite = fechaSeleccionada;
+      tareasTablero[index].prioridad = prioridadSeleccionada;
 
       controlador.clear();
       fechaSeleccionada = null;
@@ -81,7 +91,7 @@ class _ListaTareasState extends State<ListaTareas> {
   void eliminarTarea(int index) {
     setState(() {
       // Borra el elemento usando 'index'.
-      misTareas.removeAt(index);
+      tareasTablero.removeAt(index);
       Navigator.of(context).pop();
     });
   }
@@ -146,18 +156,6 @@ class _ListaTareasState extends State<ListaTareas> {
     return colorEstado;
   }
 
-  void _guardarTareas() async {
-    SharedPreferences preferencias = await SharedPreferences.getInstance();
-
-    final String tareasJson = jsonEncode(
-      misTareas.map((e) => e.toJson()).toList(),
-    );
-
-    await preferencias.setString('mis_tareas_v1', tareasJson);
-
-    print("Datos guardados satisfactoriamente");
-  }
-
   void _preguntarBorrado(int index) {
     showDialog(
       context: context,
@@ -183,21 +181,6 @@ class _ListaTareasState extends State<ListaTareas> {
     );
   }
 
-  void _leerTareas() async {
-    final preferencias = await SharedPreferences.getInstance();
-
-    // Intentamos leer el texto guardado.
-    final String? tareasJson = preferencias.getString('mis_tareas_v1');
-
-    // Si hay datos, los cargamos.
-    if (tareasJson != null) {
-      setState(() {
-        List<dynamic> mapaTareas = jsonDecode(tareasJson);
-        misTareas = mapaTareas.map((e) => Tarea.fromJson(e)).toList();
-      });
-    }
-  }
-
   void _mostrarFormTarea(EstadoTarea estadoDeLaColumna, {int? posTarea}) {
     fechaSeleccionada = null;
     prioridadSeleccionada = 0;
@@ -209,7 +192,7 @@ class _ListaTareasState extends State<ListaTareas> {
     };
     controlador.text = "";
     if (posTarea != null) {
-      Tarea tarea = misTareas[posTarea];
+      Tarea tarea = tareasTablero[posTarea];
       controlador.text = tarea.nombre;
       fechaSeleccionada = tarea.fechaLimite;
       prioridadSeleccionada = tarea.prioridad;
@@ -297,9 +280,13 @@ class _ListaTareasState extends State<ListaTareas> {
                       actualizarTarea(posTarea);
                     }
                     else {
-                      agregarTarea(estadoDeLaColumna);
+                      _crearTarea(estadoDeLaColumna);
 
                     }
+                    // Limpiar el input.
+                    controlador.clear();
+                    fechaSeleccionada = null;
+                    Navigator.of(context).pop();
                   },
                   child: posTarea != null ? Text("Actualizar") : Text("Guardar"),
                 ),
@@ -312,7 +299,7 @@ class _ListaTareasState extends State<ListaTareas> {
   }
   
   List<Tarea> _filtrarTareas(EstadoTarea estadoBuscado) {
-    return misTareas.where((tarea) => tarea.estado == estadoBuscado).toList();
+    return tareasTablero.where((tarea) => tarea.estado == estadoBuscado).toList();
   }
   
   Widget _construirColumna(String titulo, EstadoTarea estadoDeLaColumna) {
@@ -325,7 +312,6 @@ class _ListaTareasState extends State<ListaTareas> {
         setState(() {
           tareaArrastrada.estado = estadoDeLaColumna;
         });
-        _guardarTareas();
       },
 
       builder: (context, candidateData, rejectedData) {
@@ -423,7 +409,7 @@ class _ListaTareasState extends State<ListaTareas> {
   
   Widget _construirTarea(Tarea tarea, int index){
     return  Card(
-      key: ValueKey(misTareas[index]),
+      key: ValueKey(tareasTablero[index]),
       margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
       child: ListTile(
 
@@ -443,14 +429,12 @@ class _ListaTareasState extends State<ListaTareas> {
         trailing: IconButton(
           icon: Icon(Icons.delete, color: Colors.red),
           onPressed: () {
-            _preguntarBorrado(misTareas.indexOf(tarea));
-            _guardarTareas();
+            _preguntarBorrado(tareasTablero.indexOf(tarea));
           },
         ),
 
         onTap: () {
-          _mostrarFormTarea(posTarea: misTareas.indexOf(tarea), tarea.estado);
-          _guardarTareas();
+          _mostrarFormTarea(posTarea: tareasTablero.indexOf(tarea), tarea.estado);
         },
       ),
     );
@@ -502,12 +486,11 @@ class _ListaTareasState extends State<ListaTareas> {
       // Cambiamos el estado de la tarea arrastrada por si viene de otra columna distinta
       tareaArrastrada.estado = tareaObjetivo.estado;
 
-      misTareas.remove(tareaArrastrada);      
-      int indiceTareaObj = misTareas.indexOf(tareaObjetivo);
-      misTareas.insert(indiceTareaObj, tareaArrastrada);
+      tareasTablero.remove(tareaArrastrada);      
+      int indiceTareaObj = tareasTablero.indexOf(tareaObjetivo);
+      tareasTablero.insert(indiceTareaObj, tareaArrastrada);
     });
     
-    _guardarTareas();
   }
   // -------------------
 
@@ -515,56 +498,63 @@ class _ListaTareasState extends State<ListaTareas> {
   void initState() {
     super.initState(); // Llamamos al "super"
     _cargarTableros();
-    _leerTareas();
-
+    
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Lista de Tareas'),
-        titleTextStyle: TextStyle(
-          fontSize: 27,
-          fontWeight: FontWeight.bold
-        ),
-        backgroundColor: Colors.purple[800],
-        ),
-      backgroundColor: Colors.grey[850],
-      drawer: Drawer(
-        child: ListView.builder(
-          itemCount: misTableros.length,
-          itemBuilder: (context, index) {
-            // Obtenemos el tablero actual del bucle
-            var tablero = misTableros[index]; 
-            
-            return ListTile(
-              leading: Icon(Icons.dashboard),
-              // TU MISIÓN: Muestra el nombre del tablero usando tablero['name']
-              title: Text(tablero["name"]), 
+    if(tableroActual == null){
+      return Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+    else {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(tableroActual?['name']),
+          titleTextStyle: TextStyle(
+            fontSize: 27,
+            fontWeight: FontWeight.bold
+          ),
+          backgroundColor: Colors.purple[800],
+          ),
+        backgroundColor: Colors.grey[850],
+        drawer: Drawer(
+          child: ListView.builder(
+            itemCount: misTableros.length,
+            itemBuilder: (context, index) {
+              // Obtenemos el tablero actual del bucle
+              var tablero = misTableros[index]; 
               
-              onTap: () {
-                setState(() {
-                  tableroActual = tablero;
-                  Navigator.pop(context);
-                });
-              },
-            );
-          },
+              return ListTile(
+                leading: Icon(Icons.dashboard),
+                title: Text(tablero["name"]), 
+                
+                onTap: () {
+                  setState(() {
+                    tableroActual = tablero;
+                    _cargarTareas();
+                    Navigator.pop(context);
+                  });
+                },
+              );
+            },
+          ),
         ),
-      ),
-      body: ListView(
-        scrollDirection: Axis.horizontal, 
-        controller: _scrollController,
-        
-        children: [
-          // Construimos las 4 diferentes columnas segun el estado
-          _construirColumna("Backlog", EstadoTarea.backlog),
-          _construirColumna("En Progreso", EstadoTarea.enProgreso),
-          _construirColumna("Completado", EstadoTarea.completado),
-          _construirColumna("Bloqueado", EstadoTarea.bloqueado),
-        ],
-      ),
-    );
+        body: ListView(
+          scrollDirection: Axis.horizontal, 
+          controller: _scrollController,
+          
+          children: [
+            // Construimos las 4 diferentes columnas segun el estado
+            _construirColumna("Backlog", EstadoTarea.backlog),
+            _construirColumna("En Progreso", EstadoTarea.enProgreso),
+            _construirColumna("Completado", EstadoTarea.completado),
+            _construirColumna("Bloqueado", EstadoTarea.bloqueado),
+          ],
+        ),
+      );
+    }
+    
   }
 }

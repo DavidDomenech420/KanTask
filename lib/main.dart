@@ -63,6 +63,15 @@ class _ListaTareasState extends State<ListaTareas> {
     _cargarTableros();
   }
 
+  void _actualizarTablero(int? boardId) async {
+    Map<String, dynamic> tableroActualizado = {
+      'name': controlador.text,
+    };
+
+    await Supabase.instance.client.from('board').update(tableroActualizado).eq('id', boardId!);
+    _cargarTableros();
+  }
+
   void _eliminarTablero(int? boardId) async {
     await Supabase.instance.client.from("board").delete().eq("id", boardId!);
     _cargarTableros();
@@ -235,7 +244,7 @@ class _ListaTareasState extends State<ListaTareas> {
         return StatefulBuilder(
           builder: (context, setStateDelDialogo) {
             return AlertDialog(
-              title: Text('Tarea Nueva'),
+              title: posTarea != null? Text('Actualizar Tarea') : Text('Tarea Nueva'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -329,8 +338,11 @@ class _ListaTareasState extends State<ListaTareas> {
     );
   }
 
-  void _mostrarFormTablero() {
+  void _mostrarFormTablero(bool actualizar, {Tablero? tablero}) {
     controlador.text="";
+    if (actualizar) {
+      controlador.text=tablero!.nombre;
+    }
     
     showDialog(
       context: context,
@@ -338,7 +350,7 @@ class _ListaTareasState extends State<ListaTareas> {
         return StatefulBuilder(
           builder: (context, setStateDelDialogo) {
             return AlertDialog(
-              title: Text('Tarea Nueva'),
+              title: actualizar ? Text('Actualizar Tablero') : Text('Tablero Nuevo'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -359,7 +371,12 @@ class _ListaTareasState extends State<ListaTareas> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    _crearTablero();
+                    if(actualizar){
+                      _actualizarTablero(tablero!.id);
+                    }
+                    else{
+                      _crearTablero();
+                    }
                     
                     // Limpiar el input.
                     controlador.clear();
@@ -628,7 +645,7 @@ class _ListaTareasState extends State<ListaTareas> {
                           IconButton(
                             icon: Icon(Icons.edit, color: Colors.grey),
                             onPressed: () {
-                              
+                              _mostrarFormTablero(true, tablero: tablero);
                             },
                           ),
                           IconButton(
@@ -656,7 +673,7 @@ class _ListaTareasState extends State<ListaTareas> {
                 child: TextButton.icon(
                   onPressed: () {
                     Navigator.pop(context);
-                    _mostrarFormTablero();
+                    _mostrarFormTablero(false);
                   },
                   icon: Icon(Icons.add, color: Colors.black, size: 25,),
                   label: Text("Añadir tablero", style: TextStyle(color: Colors.black, fontSize: 18)),

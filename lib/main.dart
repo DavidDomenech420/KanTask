@@ -1,10 +1,10 @@
 import 'dart:async';
 
+import 'package:todo_list/data/tablero.dart';
+
 import 'data/tarea.dart';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -31,8 +31,8 @@ class _ListaTareasState extends State<ListaTareas> {
   // --- ZONA LÓGICA ---
 
   List<Tarea> tareasTablero = [];
-  List<Map<String, dynamic>> misTableros = [];
-  Map<String, dynamic>? tableroActual;
+  List<Tablero> misTableros = [];
+  Tablero? tableroActual;
 
   TextEditingController controlador = TextEditingController();
   DateTime? fechaSeleccionada;
@@ -40,20 +40,38 @@ class _ListaTareasState extends State<ListaTareas> {
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollTimer;
 
-  void _cargarTableros() async{
+  void _cargarTableros() async {
     var tableros = await Supabase.instance.client.from('board').select();
+    List<Tablero> tablerosTipados = tableros.map((diccionario) {
+        return Tablero.fromJson(diccionario);
+      }).toList();
     setState(() {
-      if (tableros.isNotEmpty) {
-        misTableros = tableros;
+      if (tablerosTipados.isNotEmpty) {
+        misTableros = tablerosTipados;
         tableroActual = misTableros.first;
         _cargarTareas();
       }
     });
   }
 
+  void _crearTablero() async {
+    Map<String, dynamic> nuevoTablero = {
+      'name': controlador.text,
+    };
+
+    await Supabase.instance.client.from('board').insert(nuevoTablero);
+    _cargarTableros();
+  }
+
+  void _eliminarTablero(int? boardId) async {
+    await Supabase.instance.client.from("board").delete().eq("id", boardId!);
+    _cargarTableros();
+  }
+
   void _cargarTareas() async {
     if (tableroActual != null) {
-      final List<dynamic> tareas = await Supabase.instance.client.from('task').select().eq('board_id', tableroActual!['id']);
+      int? boardId = tableroActual?.id;
+      final List<dynamic> tareas = await Supabase.instance.client.from('task').select().eq('board_id', boardId!);
       List<Tarea> tareasTipadas = tareas.map((diccionario) {
         return Tarea.fromJson(diccionario);
       }).toList();
@@ -69,32 +87,37 @@ class _ListaTareasState extends State<ListaTareas> {
       'due_date': fechaSeleccionada?.toIso8601String(),
       'priority': prioridadSeleccionada,
       'status': estadoTarea.name, 
-      'board_id': tableroActual!['id'],
+      'board_id': tableroActual?.id,
     };
 
     await Supabase.instance.client.from('task').insert(nuevaTarea);
     _cargarTareas();
   }
 
-  void actualizarTarea(int index){
-    setState(() {
-      tareasTablero[index].nombre = controlador.text;
-      tareasTablero[index].fechaLimite = fechaSeleccionada;
-      tareasTablero[index].prioridad = prioridadSeleccionada;
+  void _actualizarTarea(int? taskId) async {
+    Map<String, dynamic> tareaActualizada = {
+      'title': controlador.text,
+      'due_date': fechaSeleccionada?.toIso8601String(),
+      'priority': prioridadSeleccionada,
+    };
 
-      controlador.clear();
-      fechaSeleccionada = null;
-    });
-    Navigator.of(context).pop();
+    await Supabase.instance.client.from('task').update(tareaActualizada).eq('id', taskId!);
+    _cargarTareas();
   }
 
-  void eliminarTarea(int index) {
-    setState(() {
-      // Borra el elemento usando 'index'.
-      tareasTablero.removeAt(index);
-      Navigator.of(context).pop();
-    });
+  void _cambiarEstado(Tarea tareaArrastrada, EstadoTarea estadoDeLaColumna) async {
+     Map<String, dynamic> estado = {
+      'status': estadoDeLaColumna.name 
+    };
+    await Supabase.instance.client.from('task').update(estado).eq('id', tareaArrastrada.id!);
+    _cargarTareas();
   }
+
+  void _eliminarTarea(int? taskId) async {
+    await Supabase.instance.client.from("task").delete().eq("id", taskId!);
+    _cargarTareas();
+  }
+
 
   String assignarPrioridad(Tarea tarea){
     int prioridadTarea = tarea.prioridad;
@@ -156,7 +179,8 @@ class _ListaTareasState extends State<ListaTareas> {
     return colorEstado;
   }
 
-  void _preguntarBorrado(int index) {
+
+  void _preguntarBorrado(int? id, bool esTarea) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -171,7 +195,14 @@ class _ListaTareasState extends State<ListaTareas> {
 
             TextButton(
               onPressed: () {
-                eliminarTarea(index);
+                if(esTarea){
+                  _eliminarTarea(id);
+                }
+                else{
+                  _eliminarTablero(id);
+                }
+                Navigator.of(context).pop();
+
               },
               child: Text('Eliminar'),
             ),
@@ -184,6 +215,7 @@ class _ListaTareasState extends State<ListaTareas> {
   void _mostrarFormTarea(EstadoTarea estadoDeLaColumna, {int? posTarea}) {
     fechaSeleccionada = null;
     prioridadSeleccionada = 0;
+    
     final Map<int, String> etiquetasPrioridad = {
       0: 'Sin prioridad',
       1: 'Prioridad baja',
@@ -277,11 +309,10 @@ class _ListaTareasState extends State<ListaTareas> {
                 ElevatedButton(
                   onPressed: () {
                     if (posTarea != null) {
-                      actualizarTarea(posTarea);
+                      _actualizarTarea(tareasTablero[posTarea].id);
                     }
                     else {
                       _crearTarea(estadoDeLaColumna);
-
                     }
                     // Limpiar el input.
                     controlador.clear();
@@ -297,11 +328,59 @@ class _ListaTareasState extends State<ListaTareas> {
       },
     );
   }
+
+  void _mostrarFormTablero() {
+    controlador.text="";
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setStateDelDialogo) {
+            return AlertDialog(
+              title: Text('Tarea Nueva'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controlador,
+                    decoration: InputDecoration(
+                      labelText: "Nombre del tablero",
+                    ),
+                  ),
+                  SizedBox(height: 20),
+
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text("Cancelar"),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    _crearTablero();
+                    
+                    // Limpiar el input.
+                    controlador.clear();
+                    fechaSeleccionada = null;
+                    Navigator.of(context).pop();
+                  },
+                  child: Text("Guardar"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
   
   List<Tarea> _filtrarTareas(EstadoTarea estadoBuscado) {
     return tareasTablero.where((tarea) => tarea.estado == estadoBuscado).toList();
   }
   
+
   Widget _construirColumna(String titulo, EstadoTarea estadoDeLaColumna) {
     List<Tarea> tareasFiltradas = _filtrarTareas(estadoDeLaColumna);
 
@@ -309,9 +388,7 @@ class _ListaTareasState extends State<ListaTareas> {
 
       onAcceptWithDetails: (DragTargetDetails<Tarea> detalles){
         Tarea tareaArrastrada = detalles.data;
-        setState(() {
-          tareaArrastrada.estado = estadoDeLaColumna;
-        });
+        _cambiarEstado(tareaArrastrada, estadoDeLaColumna);
       },
 
       builder: (context, candidateData, rejectedData) {
@@ -429,7 +506,7 @@ class _ListaTareasState extends State<ListaTareas> {
         trailing: IconButton(
           icon: Icon(Icons.delete, color: Colors.red),
           onPressed: () {
-            _preguntarBorrado(tareasTablero.indexOf(tarea));
+            _preguntarBorrado(tarea.id, true);
           },
         ),
 
@@ -440,7 +517,7 @@ class _ListaTareasState extends State<ListaTareas> {
     );
   }
   
-  
+
   void _iniciarAutoScroll(int direccion) {
     // Si ya se está moviendo, no hacemos nada
     if (_scrollTimer != null && _scrollTimer!.isActive) return; 
@@ -498,6 +575,7 @@ class _ListaTareasState extends State<ListaTareas> {
   void initState() {
     super.initState(); // Llamamos al "super"
     _cargarTableros();
+
     
   }
 
@@ -511,7 +589,7 @@ class _ListaTareasState extends State<ListaTareas> {
     else {
       return Scaffold(
         appBar: AppBar(
-          title: Text(tableroActual?['name']),
+          title: Text(tableroActual!.nombre),
           titleTextStyle: TextStyle(
             fontSize: 27,
             fontWeight: FontWeight.bold
@@ -520,26 +598,81 @@ class _ListaTareasState extends State<ListaTareas> {
           ),
         backgroundColor: Colors.grey[850],
         drawer: Drawer(
-          child: ListView.builder(
-            itemCount: misTableros.length,
-            itemBuilder: (context, index) {
-              // Obtenemos el tablero actual del bucle
-              var tablero = misTableros[index]; 
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: 40),
+                child: Text(
+                  "Mis tableros", 
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.bold
+                    
+                  ),
+                ),
+              ),
               
-              return ListTile(
-                leading: Icon(Icons.dashboard),
-                title: Text(tablero["name"]), 
-                
-                onTap: () {
-                  setState(() {
-                    tableroActual = tablero;
-                    _cargarTareas();
+              Expanded(
+                child: ListView.builder(
+                  itemCount: misTableros.length,
+                  itemBuilder: (context, index) {
+                    // Obtenemos el tablero actual del bucle
+                    var tablero = misTableros[index]; 
+                    
+                    return ListTile(
+                      leading: Icon(Icons.dashboard),
+                      title: Text(tablero.nombre), 
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.edit, color: Colors.grey),
+                            onPressed: () {
+                              
+                            },
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete, color: Colors.red),
+                            onPressed: () {
+                              _preguntarBorrado(tablero.id, false);
+                            },
+                          ),
+                        ],
+                      ),
+                      
+                      onTap: () {
+                        setState(() {
+                          tableroActual = tablero;
+                          _cargarTareas();
+                          Navigator.pop(context);
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.only(left: 15.0, right: 15.0, bottom: 15.0),
+                child: TextButton.icon(
+                  onPressed: () {
                     Navigator.pop(context);
-                  });
-                },
-              );
-            },
-          ),
+                    _mostrarFormTablero();
+                  },
+                  icon: Icon(Icons.add, color: Colors.black, size: 25,),
+                  label: Text("Añadir tablero", style: TextStyle(color: Colors.black, fontSize: 18)),
+                  
+                  style: TextButton.styleFrom(
+                    // Esto hace que el botón ocupe todo el ancho de la columna
+                    minimumSize: Size(double.infinity, 50), 
+                    alignment: Alignment.centerLeft, // Alineamos el texto a la izquierda
+                    padding: EdgeInsets.symmetric(horizontal: 15),
+                    backgroundColor: const Color.fromARGB(106, 14, 14, 14)
+                  ),
+                ),
+              ),
+            ],
+          )
+          
         ),
         body: ListView(
           scrollDirection: Axis.horizontal, 
@@ -557,4 +690,6 @@ class _ListaTareasState extends State<ListaTareas> {
     }
     
   }
+  
+  
 }

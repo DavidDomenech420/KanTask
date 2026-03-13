@@ -74,6 +74,7 @@ class _ListaTareasState extends State<ListaTareas> {
 
   void _eliminarTablero(int? boardId) async {
     await Supabase.instance.client.from("board").delete().eq("id", boardId!);
+    tableroActual = misTableros.first;
     _cargarTableros();
   }
 
@@ -643,15 +644,18 @@ class _ListaTareasState extends State<ListaTareas> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: Icon(Icons.edit, color: Colors.grey),
+                            icon: Icon(Icons.edit, color: Colors.black),
                             onPressed: () {
                               _mostrarFormTablero(true, tablero: tablero);
                             },
                           ),
                           IconButton(
-                            icon: Icon(Icons.delete, color: Colors.red),
+                            icon: Icon(Icons.delete, color: misTableros.length == 1 ? Colors.grey[700] : Colors.red),
                             onPressed: () {
-                              _preguntarBorrado(tablero.id, false);
+                              if (misTableros.length > 1) {
+                                _preguntarBorrado(tablero.id, false);
+                                
+                              }
                             },
                           ),
                         ],

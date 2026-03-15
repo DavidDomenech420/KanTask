@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import './register_screen.dart';
 import './home_screen.dart';
@@ -23,6 +25,31 @@ class _LoginState extends State<LoginScreen> {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ListaTareas()));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al inciar sesion")));
+    }
+  }
+
+  void _entrarGoogle() async {
+    try {
+      final googleAgent = GoogleSignIn.instance;
+      await googleAgent.initialize(serverClientId: dotenv.env['GOOGLE_SERVER_ID']!);
+      final googleUser = await googleAgent.authenticate();
+
+      if (googleUser == null) {
+        return;
+      }
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken != null) {
+        await Supabase.instance.client.auth.signInWithIdToken(
+          provider: OAuthProvider.google,
+          idToken: idToken,
+        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ListaTareas()));
+      }
+    } catch (e) {
+      print("Error de Google: " + e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al inciar sesion con Google")));
     }
   }
 
@@ -71,6 +98,12 @@ class _LoginState extends State<LoginScreen> {
                         child: Text("Entrar", style: TextStyle(
                           fontSize: 18
                         ),)
+                      ),
+                      SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: _entrarGoogle, 
+                        label: Text("Entrar con Google"),
+                        icon: Icon(Icons.mail),
                       ),
                       SizedBox(height: 20),
                       TextButton(

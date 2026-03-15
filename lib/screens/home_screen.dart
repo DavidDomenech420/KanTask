@@ -21,6 +21,7 @@ class _ListaTareasState extends State<ListaTareas> {
   List<Tarea> tareasTablero = [];
   List<Tablero> misTableros = [];
   Tablero? tableroActual;
+  String userId = Supabase.instance.client.auth.currentUser!.id;
 
   TextEditingController controlador = TextEditingController();
   DateTime? fechaSeleccionada;
@@ -45,6 +46,7 @@ class _ListaTareasState extends State<ListaTareas> {
   void _crearTablero() async {
     Map<String, dynamic> nuevoTablero = {
       'name': controlador.text,
+      'user_id': userId,
     };
 
     await Supabase.instance.client.from('board').insert(nuevoTablero);
@@ -86,6 +88,7 @@ class _ListaTareasState extends State<ListaTareas> {
       'priority': prioridadSeleccionada,
       'status': estadoTarea.name, 
       'board_id': tableroActual?.id,
+      'user_id': userId,
     };
 
     await Supabase.instance.client.from('task').insert(nuevaTarea);

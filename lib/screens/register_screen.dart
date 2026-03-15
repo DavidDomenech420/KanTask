@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -20,6 +21,7 @@ class _RegisterState extends State<RegisterScreen> {
     try {
       await Supabase.instance.client.auth.signUp(password: password, email: email, data: {'name':name});
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("¡Registro completo! Revisa tu bandeja de entrada")));
+
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al registrarse")));

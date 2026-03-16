@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:todo_list/data/tablero.dart';
+import 'package:todo_list/screens/login_screen.dart';
 
 import '../data/tarea.dart';
 
@@ -28,6 +30,14 @@ class _ListaTareasState extends State<ListaTareas> {
   int prioridadSeleccionada = 0;
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollTimer;
+
+  void _cerrarSesion() async {
+    await GoogleSignIn.instance.signOut();
+
+    await Supabase.instance.client.auth.signOut();
+
+    Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => LoginScreen()),(route) => false);
+  }
 
   void _cargarTableros() async {
     var tableros = await Supabase.instance.client.from('board').select();
@@ -604,7 +614,25 @@ class _ListaTareasState extends State<ListaTareas> {
             fontWeight: FontWeight.bold
           ),
           backgroundColor: Colors.purple[800],
-          ),
+          actions: [
+            PopupMenuButton<String>(
+              iconColor: Colors.white,
+              onSelected: (String opcion) {
+                if (opcion == "salir") {
+                  _cerrarSesion();
+                }
+              },
+              itemBuilder: (BuildContext context) {
+                return [
+                  const PopupMenuItem<String>(
+                    value: 'salir',
+                    child: Text('Cerrar Sesión'),
+                  ),
+                ];
+              },
+            )
+          ],
+        ),
         backgroundColor: Colors.grey[850],
         drawer: Drawer(
           child: Column(

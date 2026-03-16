@@ -8,7 +8,6 @@ import '../data/tarea.dart';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
 class ListaTareas extends StatefulWidget {
@@ -24,6 +23,8 @@ class _ListaTareasState extends State<ListaTareas> {
   List<Tablero> misTableros = [];
   Tablero? tableroActual;
   String userId = Supabase.instance.client.auth.currentUser!.id;
+  StreamSubscription<List<Map<String, dynamic>>>? suscripcionTableros;
+  StreamSubscription<List<Map<String, dynamic>>>? suscripcionTareas;
 
   TextEditingController controlador = TextEditingController();
   DateTime? fechaSeleccionada;
@@ -40,16 +41,27 @@ class _ListaTareasState extends State<ListaTareas> {
   }
 
   void _cargarTableros() async {
-    var tableros = await Supabase.instance.client.from('board').select();
-    List<Tablero> tablerosTipados = tableros.map((diccionario) {
-        return Tablero.fromJson(diccionario);
-      }).toList();
-    setState(() {
-      if (tablerosTipados.isNotEmpty) {
-        misTableros = tablerosTipados;
-        tableroActual = misTableros.first;
-        _cargarTareas();
-      }
+    suscripcionTableros = Supabase.instance.client.from('board')
+    .stream(primaryKey: ['id'])
+    .eq("user_id", userId)
+    .listen((tableros) {
+      List<Tablero> tablerosTipados = tableros.map((diccionario) {
+          return Tablero.fromJson(diccionario);
+        }).toList();
+      setState(() {
+        if (tablerosTipados.isNotEmpty) {
+          misTableros = tablerosTipados;
+          if (tableroActual == null) {
+            tableroActual = misTableros.first;
+          }else{
+            tableroActual = misTableros.firstWhere(
+              (t) => t.id == tableroActual!.id,
+              orElse: () => misTableros.first, // Por si justo borraron el que estábamos viendo
+            );
+          }
+          _cargarTareas();
+        }
+      });
     });
   }
 
@@ -60,7 +72,6 @@ class _ListaTareasState extends State<ListaTareas> {
     };
 
     await Supabase.instance.client.from('board').insert(nuevoTablero);
-    _cargarTableros();
   }
 
   void _actualizarTablero(int? boardId) async {
@@ -69,24 +80,29 @@ class _ListaTareasState extends State<ListaTareas> {
     };
 
     await Supabase.instance.client.from('board').update(tableroActualizado).eq('id', boardId!);
-    _cargarTableros();
+    
   }
 
   void _eliminarTablero(int? boardId) async {
     await Supabase.instance.client.from("board").delete().eq("id", boardId!);
     tableroActual = misTableros.first;
-    _cargarTableros();
+    
   }
 
   void _cargarTareas() async {
     if (tableroActual != null) {
       int? boardId = tableroActual?.id;
-      final List<dynamic> tareas = await Supabase.instance.client.from('task').select().eq('board_id', boardId!);
-      List<Tarea> tareasTipadas = tareas.map((diccionario) {
-        return Tarea.fromJson(diccionario);
-      }).toList();
-      setState(() {
-        tareasTablero = tareasTipadas;
+      suscripcionTareas?.cancel();
+      suscripcionTableros = Supabase.instance.client.from('task')
+      .stream(primaryKey: ['id'])
+      .eq("board_id", boardId!)
+      .listen((tareas) {
+        List<Tarea> tareasTipadas = tareas.map((diccionario) {
+          return Tarea.fromJson(diccionario);
+        }).toList();
+        setState(() {
+          tareasTablero = tareasTipadas;
+        });
       });
     }
   }
@@ -102,7 +118,7 @@ class _ListaTareasState extends State<ListaTareas> {
     };
 
     await Supabase.instance.client.from('task').insert(nuevaTarea);
-    _cargarTareas();
+    
   }
 
   void _actualizarTarea(int? taskId) async {
@@ -113,7 +129,7 @@ class _ListaTareasState extends State<ListaTareas> {
     };
 
     await Supabase.instance.client.from('task').update(tareaActualizada).eq('id', taskId!);
-    _cargarTareas();
+    
   }
 
   void _cambiarEstado(Tarea tareaArrastrada, EstadoTarea estadoDeLaColumna) async {
@@ -121,12 +137,12 @@ class _ListaTareasState extends State<ListaTareas> {
       'status': estadoDeLaColumna.name 
     };
     await Supabase.instance.client.from('task').update(estado).eq('id', tareaArrastrada.id!);
-    _cargarTareas();
+    
   }
 
   void _eliminarTarea(int? taskId) async {
     await Supabase.instance.client.from("task").delete().eq("id", taskId!);
-    _cargarTareas();
+    
   }
 
 
@@ -594,8 +610,13 @@ class _ListaTareasState extends State<ListaTareas> {
   void initState() {
     super.initState(); // Llamamos al "super"
     _cargarTableros();
+  }
 
-    
+  @override
+  void dispose() {
+    suscripcionTableros?.cancel;
+    suscripcionTareas?.cancel;
+    super.dispose();
   }
 
   @override

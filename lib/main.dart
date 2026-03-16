@@ -1,13 +1,11 @@
 import 'dart:async';
 
-import 'package:todo_list/data/tablero.dart';
-
-import 'data/tarea.dart';
-import './screens/login_screen.dart';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'package:todo_list/screens/splashscreen_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +18,7 @@ void main() async {
   );
 
 
-  runApp(MaterialApp(home: LoginScreen()));
+  runApp(MaterialApp(home: SplashScreen()));
 }
 
 

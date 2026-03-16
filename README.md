@@ -16,3 +16,5 @@ Si solo tenemos un tablero el boton de eliminar esta desactivado para impedir qu
 Una vez se ha creado una tarea poder moverla por las columnas manteniendo pulsado y arrastrandola a la columna donde queremos que este. Podremos eliminar la tarea pulsando al boton de la basura y al pulsar en la tarea se podra editar.
 
 Si eliminamos el tablero en el que estamos actualmente, se cambiara directamente al primer tablero que tengas.
+
+Se ha hecho una pantalla inicial donde se mirara si el usuario esta logueado ya o no, si no lo esta iremos a la pagina de login y si esta logueado iremos a la pagina de home. Se hace esta funcion para conseguir la comodidad del usuario.

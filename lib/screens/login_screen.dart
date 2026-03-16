@@ -32,6 +32,7 @@ class _LoginState extends State<LoginScreen> {
     try {
       final googleAgent = GoogleSignIn.instance;
       await googleAgent.initialize(serverClientId: dotenv.env['GOOGLE_SERVER_ID']!);
+      await googleAgent.signOut(); // Nos aseguramos de cerrar cualquier sesion fantasma
       final googleUser = await googleAgent.authenticate();
 
       if (googleUser == null) {

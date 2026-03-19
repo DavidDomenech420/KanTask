@@ -43,7 +43,6 @@ class _ListaTareasState extends State<ListaTareas> {
   void _cargarTableros() async {
     suscripcionTableros = Supabase.instance.client.from('board')
     .stream(primaryKey: ['id'])
-    .eq("user_id", userId)
     .listen((tableros) {
       List<Tablero> tablerosTipados = tableros.map((diccionario) {
           return Tablero.fromJson(diccionario);
@@ -68,7 +67,7 @@ class _ListaTareasState extends State<ListaTareas> {
   void _crearTablero() async {
     Map<String, dynamic> nuevoTablero = {
       'name': controlador.text,
-      'user_id': userId,
+      'owner_id': userId,
     };
 
     await Supabase.instance.client.from('board').insert(nuevoTablero);
@@ -93,7 +92,7 @@ class _ListaTareasState extends State<ListaTareas> {
     if (tableroActual != null) {
       int? boardId = tableroActual?.id;
       suscripcionTareas?.cancel();
-      suscripcionTableros = Supabase.instance.client.from('task')
+      suscripcionTareas = Supabase.instance.client.from('task')
       .stream(primaryKey: ['id'])
       .eq("board_id", boardId!)
       .listen((tareas) {
@@ -114,7 +113,7 @@ class _ListaTareasState extends State<ListaTareas> {
       'priority': prioridadSeleccionada,
       'status': estadoTarea.name, 
       'board_id': tableroActual?.id,
-      'user_id': userId,
+      'created_by': userId,
     };
 
     await Supabase.instance.client.from('task').insert(nuevaTarea);
@@ -520,6 +519,7 @@ class _ListaTareasState extends State<ListaTareas> {
   }
   
   Widget _construirTarea(Tarea tarea, int index){
+    bool tienePermiso = (tableroActual != null && userId == tableroActual!.ownerId) || (userId == tarea.createdBy);
     return  Card(
       key: ValueKey(tareasTablero[index]),
       margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
@@ -530,6 +530,7 @@ class _ListaTareasState extends State<ListaTareas> {
         ),
 
         subtitle: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             tarea.fechaLimite != null ? Text("${tarea.fechaLimite!.day}/${tarea.fechaLimite!.month}/${tarea.fechaLimite!.year}",) : Text(""),
@@ -538,15 +539,18 @@ class _ListaTareasState extends State<ListaTareas> {
             ),)
           ],
         ),
-        trailing: IconButton(
+        
+        trailing:  tienePermiso ? IconButton(
           icon: Icon(Icons.delete, color: Colors.red),
           onPressed: () {
             _preguntarBorrado(tarea.id, true);
           },
-        ),
+        ) : null,
 
         onTap: () {
-          _mostrarFormTarea(posTarea: tareasTablero.indexOf(tarea), tarea.estado);
+          if (tienePermiso) {
+            _mostrarFormTarea(posTarea: tareasTablero.indexOf(tarea), tarea.estado);
+          }
         },
       ),
     );
@@ -627,6 +631,9 @@ class _ListaTareasState extends State<ListaTareas> {
       );
     }
     else {
+      print("Tableros: " + misTableros.toString());
+      var tablerosPropios = misTableros.where((t) => t.ownerId == userId).toList();
+      var tablerosCompartidos = misTableros.where((t) => t.ownerId != userId).toList();
       return Scaffold(
         appBar: AppBar(
           title: Text(tableroActual!.nombre),
@@ -656,35 +663,21 @@ class _ListaTareasState extends State<ListaTareas> {
         ),
         backgroundColor: Colors.grey[850],
         drawer: Drawer(
-          child: Column(
+          child: ListView(
             children: [
-              Padding(
-                padding: EdgeInsets.only(top: 40),
-                child: Text(
-                  "Mis tableros", 
-                  style: TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold
-                    
-                  ),
-                ),
-              ),
-              
-              Expanded(
-                child: ListView.builder(
-                  itemCount: misTableros.length,
-                  itemBuilder: (context, index) {
-                    // Obtenemos el tablero actual del bucle
-                    var tablero = misTableros[index]; 
-                    
+              ExpansionTile(
+                title: Text('Tableros Propios'),
+                initiallyExpanded: true, // Si quieres que empiece abierto por defecto
+                children: 
+                  tablerosPropios.map((tablero) {
                     return ListTile(
                       leading: Icon(Icons.dashboard),
-                      title: Text(tablero.nombre), 
+                      title: Text(tablero.nombre),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            icon: Icon(Icons.edit, color: Colors.black),
+                            icon: const Icon(Icons.edit, color: Colors.black),
                             onPressed: () {
                               _mostrarFormTablero(true, tablero: tablero);
                             },
@@ -694,13 +687,11 @@ class _ListaTareasState extends State<ListaTareas> {
                             onPressed: () {
                               if (misTableros.length > 1) {
                                 _preguntarBorrado(tablero.id, false);
-                                
                               }
                             },
                           ),
                         ],
                       ),
-                      
                       onTap: () {
                         setState(() {
                           tableroActual = tablero;
@@ -709,9 +700,31 @@ class _ListaTareasState extends State<ListaTareas> {
                         });
                       },
                     );
-                  },
-                ),
+                  }).toList(),
+                  
               ),
+              SizedBox(height: 30),
+              ExpansionTile(
+                title: Text('Tableros Compartidos'),
+                initiallyExpanded: true, // Si quieres que empiece abierto por defecto
+                children: 
+                  tablerosCompartidos.map((tablero) {
+                    return ListTile(
+                      leading: Icon(Icons.dashboard),
+                      title: Text(tablero.nombre),
+                      onTap: () {
+                        setState(() {
+                          tableroActual = tablero;
+                          tareasTablero.clear();
+                          _cargarTareas();
+                          Navigator.pop(context);
+                        });
+                      },
+                    );
+                  }).toList(),
+                  
+              ),
+              SizedBox(height: 100),
               Padding(
                 padding: EdgeInsets.only(left: 15.0, right: 15.0, bottom: 15.0),
                 child: TextButton.icon(

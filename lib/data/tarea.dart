@@ -8,8 +8,9 @@ class Tarea {
   DateTime? fechaLimite;
   int prioridad;
   int boardId;
+  String? createdBy;
 
-  Tarea({this.id, required this.nombre, this.descripcion = "", this.estado = EstadoTarea.backlog, this.fechaLimite, this.prioridad = 0, required this.boardId});
+  Tarea({this.id, required this.nombre, this.descripcion = "", this.estado = EstadoTarea.backlog, this.fechaLimite, this.prioridad = 0, required this.boardId, this.createdBy});
 
   Map<String, dynamic> toJson() {
     return {
@@ -31,6 +32,7 @@ class Tarea {
           : null,
       prioridad: json['priority'] ?? 0,
       boardId: json['board_id'] ?? 0,
+      createdBy: json['created_by'],
     );
   }
 

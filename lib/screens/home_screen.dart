@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:todo_list/data/tablero.dart';
 import 'package:todo_list/screens/login_screen.dart';
+import 'package:todo_list/screens/panel_invitados_popup.dart';
 
 import '../data/tarea.dart';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:app_links/app_links.dart';
 
 
 class ListaTareas extends StatefulWidget {
@@ -21,16 +23,56 @@ class _ListaTareasState extends State<ListaTareas> {
 
   List<Tarea> tareasTablero = [];
   List<Tablero> misTableros = [];
+  List<Tablero> tablerosPropios = [];
+  List<Tablero> tablerosCompartidos = [];
   Tablero? tableroActual;
   String userId = Supabase.instance.client.auth.currentUser!.id;
   StreamSubscription<List<Map<String, dynamic>>>? suscripcionTableros;
   StreamSubscription<List<Map<String, dynamic>>>? suscripcionTareas;
+
+  List<Map<String, dynamic>> listaUsuarios = []; 
+  bool cargando = true;
 
   TextEditingController controlador = TextEditingController();
   DateTime? fechaSeleccionada;
   int prioridadSeleccionada = 0;
   final ScrollController _scrollController = ScrollController();
   Timer? _scrollTimer;
+
+  final _appLinks = AppLinks(); // Instanciamos el radar
+
+  void _configurarDeepLinks() {
+    // Ponemos el radar a escuchar
+    _appLinks.uriLinkStream.listen((Uri? uri) async {
+      if (uri != null) {
+        // 1. Comprobamos si el enlace tiene la palabra 'invite'
+        if (uri.host == 'invite') {
+          
+          // 2. Extraemos el token secreto de la URL
+          String? token = uri.queryParameters['token'];
+          
+          if (token != null) {
+            try {
+              await Supabase.instance.client.rpc(
+                'aceptar_invitacion', 
+                params: {'token_secreto': token}
+              );
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Te has unido al tablero con éxito')),
+                );
+              }
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Ha habido un problema entrando al tablero compartido')),
+              );
+            }
+          }
+        }
+      }
+    });
+  }
 
   void _cerrarSesion() async {
     await GoogleSignIn.instance.signOut();
@@ -144,6 +186,24 @@ class _ListaTareasState extends State<ListaTareas> {
     
   }
 
+  void _salirTablero() async {
+    var boardId = tableroActual!.id;
+    await Supabase.instance.client
+    .from('board_members')
+    .delete()
+    .match({
+      'board_id': boardId!,
+      'user_id': userId
+    });
+
+    setState(() {
+      misTableros.removeWhere((tablero) => tablero.id == boardId);
+      tableroActual = tablerosPropios.first;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Has salido del tablero con éxito')),
+    );
+  }
 
   String assignarPrioridad(Tarea tarea){
     int prioridadTarea = tarea.prioridad;
@@ -205,7 +265,7 @@ class _ListaTareasState extends State<ListaTareas> {
     return colorEstado;
   }
 
-
+  
   void _preguntarBorrado(int? id, bool esTarea) {
     showDialog(
       context: context,
@@ -410,6 +470,58 @@ class _ListaTareasState extends State<ListaTareas> {
     );
   }
   
+  void _mostrarPopUpInvitacion() async {
+    TextEditingController controladorEmail = TextEditingController();
+    int? boardId = tableroActual!.id;
+    showDialog(
+      context: context, 
+      builder: (BuildContext context) {
+        return PanelInvitadosPopUp(boardId: boardId!, userId: userId);
+      }
+    );
+  }
+
+  void _mostrarPopUpSalirTablero(){
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setStateDelDialogo) {
+            return AlertDialog(
+              title: Text('Salir de ${tableroActual!.nombre}'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("Perderás el acceso a las tareas y no podrás volver a entrar a menos que te inviten de nuevo"),
+                  SizedBox(height: 20),
+
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text("Cancelar"),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[800],
+                    foregroundColor: Colors.white70
+                  ),
+                  onPressed: () {
+                    _salirTablero();
+                    Navigator.of(context).pop();
+                  },
+                  child: Text("Salir del tablero"),
+                  
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   List<Tarea> _filtrarTareas(EstadoTarea estadoBuscado) {
     return tareasTablero.where((tarea) => tarea.estado == estadoBuscado).toList();
   }
@@ -613,6 +725,7 @@ class _ListaTareasState extends State<ListaTareas> {
   @override
   void initState() {
     super.initState(); // Llamamos al "super"
+    _configurarDeepLinks();
     _cargarTableros();
   }
 
@@ -631,9 +744,8 @@ class _ListaTareasState extends State<ListaTareas> {
       );
     }
     else {
-      print("Tableros: " + misTableros.toString());
-      var tablerosPropios = misTableros.where((t) => t.ownerId == userId).toList();
-      var tablerosCompartidos = misTableros.where((t) => t.ownerId != userId).toList();
+      tablerosPropios = misTableros.where((t) => t.ownerId == userId).toList();
+      tablerosCompartidos = misTableros.where((t) => t.ownerId != userId).toList();
       return Scaffold(
         appBar: AppBar(
           title: Text(tableroActual!.nombre),
@@ -649,10 +761,26 @@ class _ListaTareasState extends State<ListaTareas> {
                 if (opcion == "salir") {
                   _cerrarSesion();
                 }
+                if (opcion == "salirTablero") {
+                  _mostrarPopUpSalirTablero();
+                }
+                if (opcion == "invite") {
+                  _mostrarPopUpInvitacion();
+                }
               },
               itemBuilder: (BuildContext context) {
                 return [
-                  const PopupMenuItem<String>(
+                  if(tablerosPropios.contains(tableroActual))
+                    PopupMenuItem<String>(
+                      value: 'invite',
+                      child: Text('Invitar Usuarios a ${tableroActual!.nombre}'),
+                    ),
+                  if(tablerosCompartidos.contains(tableroActual))
+                    PopupMenuItem<String>(
+                      value: 'salirTablero',
+                      child: Text('Salir de ${tableroActual!.nombre}'),
+                    ),
+                  PopupMenuItem<String>(
                     value: 'salir',
                     child: Text('Cerrar Sesión'),
                   ),

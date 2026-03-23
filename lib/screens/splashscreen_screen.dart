@@ -14,7 +14,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashState extends State<SplashScreen> {
 
   Future<void> _comprobarSesion() async {
-    await Future.delayed(Duration(seconds: 1));
+    await Future.delayed(Duration(seconds: 2));
 
     final sesionActual = Supabase.instance.client.auth.currentSession;
 
